@@ -1,4 +1,8 @@
-(function() {
+HTMLElement.prototype.append = function(tag) {
+    return this.appendChild(document.createElement(tag));
+};
+
+(() => {
     
     const corsServerUrl = "https://cors-anywhere.herokuapp.com/";
     
@@ -11,60 +15,39 @@
         });
     };
     
-    const fetchCountryData = async function(input) {
+    const fetchPopulationData = async function(input) {
         const response = await corsFetch(
-            "http://api.worldbank.org/countries" + input + `?per_page=${2 ** (16 - 1) - 1}&format=json`);
+            "http://api.population.io/1.0/" + input + "?format=json");
         return await response.json();
     };
     
     const fetchCountries = async function() {
-        const data = await fetchCountryData("");
-        return data[1]
-            .filter(country => country.region.id !== "NA") // filter out continents
-            .reduce((countries, country) => (countries[country.name] = country, countries), {});
+        return (await fetchPopulationData("countries")).countries;
     };
     
-    HTMLElement.prototype.append = function(tag) {
-        return this.appendChild(document.createElement(tag));
+    const fetchCountryPopulationInYear = async function(country, year) {
+        const data = await fetchPopulationData(`population/${year}/${country}`);
     };
     
-    const countriesDiv = document.body.appendChild(document.createElement("div"));
+    const firstYear = 1950;
+    const lastYear = 2018;
     
-    (async function() {
-        
-        const countries = await fetchCountries();
-        
-        const fetchCountryPopulation = async function(country) {
-            const data = await fetchCountryData(`/${country.iso2Code}/indicators/SP.POP.TOTL`);
-            return data[1] && data[1]
-                .map(year => ({year: parseInt(year.date), population: year.value}))
-                .sort((a, b) => a.year - b.year);
-        };
-        
-        const processPopulation = function(years) {
-            // TODO
-        };
-        
-        const displayCountry = function(country) {
-            const countryDiv = countriesDiv.append("div");
-            
-        };
-        
-        await Promise.all(Object.values(countries)
-            .map(async (country) => {
-                const population = await fetchCountryPopulation(country);
-                if (population) {
-                    country.population = population;
-                    country.populationAggregates = processPopulation(population);
-                }
-                displayCountry(country);
-                return country;
-            })
-        );
-        
-        window.countries = countries;
-        console.log(countries);
-        
+    const fetchCountryPopulation = function(country) {
+        return Promise.all(new Array(lastYear - firstYear + 1)
+            .fill(0)
+            .map((e, i) => i + firstYear)
+            .map(fetchCountryPopulationInYear.bind(null, country)));
+    };
+    
+    (async () => {
+        (await fetchCountries())
+            .forEach(async country => {
+                const populations = await fetchCountryPopulation(country);
+                const summary = populations.map((population, i) => {
+                    const year = firstYear + i;
+                });
+                
+            });
     })();
     
 })();

@@ -53,6 +53,7 @@ HTMLElement.prototype.append = function(tag) {
 })();
 
 var data = JSON.parse(tempdata);
+var test = data.slice(0, 5);
 
 var genderPercent = function(data) {
     var f = data.map(function(n) {
@@ -71,14 +72,45 @@ var genderPercent = function(data) {
 };
 
 var minorCount = function(data) {
-    var t = data.map(function(n) {
-        return n.age < 18 ? n.total : 0;
+    var t = data.filter(function(n) {
+        return n.age < 18;
+    }).map(function(n) {
+        return n.total
     });
-    var total = t.reduce(function(a, b) {
-        return a + b;
-    });
-    return total
+    if (t.length > 0) {
+        var total = t.reduce(function(a, b) {
+            return a + b;
+        });
+        return total
+    }
+    return 0;
 };
 
-console.log(genderPercent(data));
-console.log(minorCount(data));
+var medianAge = function(data) {
+    var total = data.map(function(n) {
+        return n.total;
+    }).reduce(function(a, b) {
+        return a + b;
+    });
+
+    var mid = total / 2;
+    var med = data.reduce(function(a, b) {
+        if (mid < a.total) {
+            return a;
+        } else {
+            mid -= a.total;
+            return b;
+        }
+    });
+    return med.age;
+}
+
+console.log("Ages 0 to 4 only");
+console.log("Percent Female: ", genderPercent(test));
+console.log("Median Age: ", medianAge(test));
+console.log("Minor (under 18) Count: ", minorCount(test));
+console.log("All test data");
+console.log("Percent Female: ", genderPercent(data));
+console.log("Median Age: ", medianAge(data));
+console.log("Minor Count: ", minorCount(data));
+

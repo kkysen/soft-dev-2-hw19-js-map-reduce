@@ -1,3 +1,10 @@
+/*
+ * Khyber Sen and Helen Ye
+ * SoftDev2 pd7
+ * K19 -- Onions, Bell Peppers, and Celery, Oh My!
+ * 2018-05-03
+ */
+
 equaling = function(obj) {
     return o => obj === o;
 };
@@ -13,6 +20,10 @@ Array.prototype.including = function(useSet = true) {
 
 Array.prototype.sum = function() {
     return this.length === 0 ? 0 : this.reduce((a, b) => a + b);
+};
+
+Array.prototype.average = function() {
+    return this.sum() / this.length;
 };
 
 Array.prototype.median = function() {
@@ -34,6 +45,19 @@ Array.prototype.medianValue = function(valueFunc) {
     });
 };
 
+Array.prototype.max = function(valueFunc) {
+    let maxI = 0;
+    let max = valueFunc(this[maxI]);
+    for (let i = maxI + 1; i < this.length; i++) {
+        const value = valueFunc(this[i]);
+        if (value > max) {
+            max = value;
+            maxI = i;
+        }
+    }
+    return this[maxI];
+};
+
 Array.prototype.toObject = function() {
     return this.reduce((o, [property, value]) => (o[property] = value, o), {});
 };
@@ -45,6 +69,26 @@ Array.prototype.flattenObjects = function() {
     return Object.keys(this[0])
         .map(key => [key, this.map(e => e[key])])
         .toObject();
+};
+
+Array.prototype.peek = function(func) {
+    this.forEach(func);
+    return this;
+};
+
+Array.prototype.derivative = function() {
+    const n = this.length;
+    if (n === 0) {
+        return [];
+    }
+    if (n === 1) {
+        return [0.5 * (this[0] + this[1])];
+    }
+    const derivative = new Array(n - 2);
+    for (let i = 0; i < n - 2; i++) {
+        derivative[i] = 0.5 * (this[i] + this[i + 2]);
+    }
+    return derivative;
 };
 
 HTMLElement.prototype.append = function(tag) {
@@ -140,19 +184,45 @@ const processPopulationAges = function(ages) {
     const total = ages.map(e => e.total).sum();
     const male = ages.map(e => e.males).sum();
     const female = total - male;
+    const numMinors = ages.filter(e => e.age < 18).map(e => e.total).sum();
+    const numElderly = ages.filter(e => e.age >= 100).map(e => e.total).sum();
     return {
+        "Population": total,
+        "Most Common Age": ages.max(e => e.total).age,
         "Percent Male": 100 * male / total,
         "Percent Female": 100 * female / total,
-        "Number of Minors": ages.filter(e => e.age < 18).map(e => e.total).sum(),
+        "Number of Minors": numMinors,
+        "Percent Minors": 100 * numMinors / total,
+        "Number of Elderly (>= 100)": numElderly,
+        "Percent Elderly (>= 100": 100 * numElderly / total,
         "Median Age": ages.medianValue(e => e.total).age,
+        "Average Age": ages.map(e => e.total * e.age).sum() / total,
     };
 };
 
 const countriesDiv = d3.select(document.body).append("div");
 
-const graphSummaries = function(country, summaries) {
-    const countryDiv = countriesDiv.append("div");
-    countryDiv.append("h3").text(country);
+countriesDiv.append("h1")
+    .text("Population Aggregates for Various Countries from 1950 to 2018")
+    .styles({
+        "text-align": "center",
+    });
+
+// TODO add data description
+
+const graphAggregates = function(country, aggregates) {
+    const countryDiv = countriesDiv
+        .append("div")
+        .attrs({
+            id: country,
+        })
+    ;
+    countryDiv.append("h3")
+        .text(country)
+        .styles({
+            "text-align": "center",
+        })
+    ;
     
     const fullSize = {
         width: 500,
@@ -173,41 +243,59 @@ const graphSummaries = function(country, summaries) {
         y: d3.scaleLinear().rangeRound([size.height, 0]),
     };
     scales.x.domain([firstYear, lastYear]);
-    Object.entries(summaries)
+    Object.entries(aggregates)
         .map(([field, values]) => {
             const svg = countryDiv.append("svg")
-                .attrs(fullSize);
+                .attrs(fullSize)
+            ;
             const g = svg.append("g")
-                .attrs({transform: `translate(${margins.left},${margins.top})`});
+                .attrs({transform: `translate(${margins.left},${margins.top})`})
+            ;
             
             const x = scales.x;
             const y = scales.y.copy().domain(d3.extent(values));
             const line = d3.line()
-                .x((d, i) => scales.x(firstYear + i))
-                .y(scales.y);
+                .x((d, i) => x(firstYear + i))
+                .y(y)
+            ;
+            
+            const axisLabelStyle = {
+                "font-size": "16px",
+            };
             
             // x axis
             g.append("g")
                 .attrs({
                     transform: `translate(${0}, ${size.height})`,
                 })
-                .text("Year")
                 .call(d3.axisBottom(x))
-                .select(".domain")
-                .remove();
+                .append("text")
+                .text("Year")
+                .attrs({
+                    // transform: `translate(${0}, ${size.height})`,
+                    fill: "#000", // TODO
+                    x: size.width - 6,
+                    y: -6,
+                    dx: 0.71 + "em",
+                    "text-anchor": "end",
+                })
+                .styles(axisLabelStyle)
+            ;
             
             // y axis
             g.append("g")
                 .call(d3.axisLeft(y))
                 .append("text")
+                .text(field)
                 .attrs({
-                    fill: "#000", // TODO
                     transform: "rotate(-90)",
+                    fill: "#000", // TODO
                     y: 6,
                     dy: 0.71 + "em",
                     "text-anchor": "end",
                 })
-                .text(field);
+                .styles(axisLabelStyle)
+            ;
             
             // line
             g.append("path")
@@ -219,160 +307,65 @@ const graphSummaries = function(country, summaries) {
                     "stroke-linecap": "round",
                     "stroke-width": 1.5, // TODO
                     d: line,
-                });
+                })
+            ;
         });
 };
 
 (async () => {
+    countriesDiv.i = 0;
+    const countryLinksDiv = countriesDiv.append("div");
+    setTimeout(() => {
+        for (const link of countryLinksDiv.node().children) {
+            if (!document.getElementById(link.country)) {
+                link.remove();
+            }
+        }
+    }, 1000 * 10);
     (await fetchCountries())
-        .filter(equaling("United States"))
-        // .filter(["United States"].including())
-        .forEach(async country => {
+    // .filter(equaling("United States"))
+        .filter([
+            "United States",
+            "Angola",
+            "India",
+            "China",
+            "World",
+            "Singapore",
+            "Japan",
+            "Greece",
+            "Brazil",
+            // "Nigeria",
+            "Iraq",
+            "EUROPE",
+            "United Kingdom",
+            "Qatar",
+            "Maldives",
+            "Russian Federation",
+            "Fiji",
+        ].including())
+        .map(country => {
+            const link = countryLinksDiv.append("div");
+            link.node().country = country;
+            link.append("a")
+                .attrs({
+                    href: `#${country}`,
+                })
+                .text(country)
+            ;
+            link.append("br");
+            return [country, link];
+        })
+        .forEach(async ([country, link]) => {
             const populations = await fetchCountryPopulation(country);
-            const summaries = populations.map(processPopulationAges).flattenObjects();
-            graphSummaries(country, summaries);
+            try {
+                const aggregates = populations.map(processPopulationAges).flattenObjects();
+                if (countriesDiv.i++ !== 0) {
+                    ["br", "hr", "br"].forEach(countriesDiv.append.bind(countriesDiv));
+                }
+                graphAggregates(country, aggregates);
+            } catch (e) {
+                console.error(e);
+                country.link.remove();
+            }
         });
 })();
-
-var tempdata = "[{\"females\": 1840000, \"country\": \"United States\", \"age\": 0, \"males\": " +
-    "1923000, \"year\": 1950, \"total\": 3763000}, {\"females\": 1760000, \"country\": \"United States\", " +
-    "\"age\": 1, \"males\": 1840000, \"year\": 1950, \"total\": 3600000}, {\"females\": 1682000, " +
-    "\"country\": \"United States\", \"age\": 2, \"males\": 1760000, \"year\": 1950, \"total\": " +
-    "3442000}, {\"females\": 1607000, \"country\": \"United States\", \"age\": 3, \"males\": 1682000, " +
-    "\"year\": 1950, \"total\": 3289000}, {\"females\": 1535000, \"country\": \"United States\", " +
-    "\"age\": 4, \"males\": 1607000, \"year\": 1950, \"total\": 3142000}, {\"females\": 1467000, " +
-    "\"country\": \"United States\", \"age\": 5, \"males\": 1535000, \"year\": 1950, \"total\": " +
-    "3002000}, {\"females\": 1403000, \"country\": \"United States\", \"age\": 6, \"males\": 1467000, " +
-    "\"year\": 1950, \"total\": 2870000}, {\"females\": 1343000, \"country\": \"United States\", " +
-    "\"age\": 7, \"males\": 1404000, \"year\": 1950, \"total\": 2747000}, {\"females\": 1288000, \"country\":" +
-    " \"United States\", \"age\": 8, \"males\": 1345000, \"year\": 1950, \"total\": 2634000}, {\"females\": 123" +
-    "9000, \"country\": \"United States\", \"age\": 9, \"males\": 1292000, \"year\": 1950, \"total\": 2532000}," +
-    " {\"females\": 1195000, \"country\": \"United States\", \"age\": 10, \"males\": 1244000, \"year\": 1950, " +
-    "\"total\": 2439000}, {\"females\": 1156000, \"country\": \"United States\", \"age\": 11, \"males\": 1200000" +
-    ", \"year\": 1950, \"total\": 2357000}, {\"females\": 1126000, \"country\": \"United States\", \"age\": 12, " +
-    "\"males\": 1167000, \"year\": 1950, \"total\": 2293000}, {\"females\": 1108000, \"country\": \"United State" +
-    "s\", \"age\": 13, \"males\": 1145000, \"year\": 1950, \"total\": 2253000}, {\"females\": 1099000, \"country" +
-    "\": \"United States\", \"age\": 14, \"males\": 1133000, \"year\": 1950, \"total\": 2232000}, {\"females\": 1" +
-    "093000, \"country\": \"United States\", \"age\": 15, \"males\": 1125000, \"year\": 1950, \"total\": 2219000" +
-    "}, {\"females\": 1091000, \"country\": \"United States\", \"age\": 16, \"males\": 1121000, \"year\": 1950, " +
-    "\"total\": 2212000}, {\"females\": 1099000, \"country\": \"United States\", \"age\": 17, \"males\": 1125000" +
-    ", \"year\": 1950, \"total\": 2224000}, {\"females\": 1119000, \"country\": \"United States\", \"age\": 18, " +
-    "\"males\": 1138000, \"year\": 1950, \"total\": 2257000}, {\"females\": 1147000, \"country\": \"United State" +
-    "s\", \"age\": 19, \"males\": 1158000, \"year\": 1950, \"total\": 2305000}, {\"females\": 1177000, \"country" +
-    "\": \"United States\", \"age\": 20, \"males\": 1179000, \"year\": 1950, \"total\": 2356000}, {\"females\": 1" +
-    "208000, \"country\": \"United States\", \"age\": 21, \"males\": 1202000, \"year\": 1950, \"total\": 2410000" +
-    "}, {\"females\": 1235000, \"country\": \"United States\", \"age\": 22, \"males\": 1224000, \"year\": 1950, " +
-    "\"total\": 2459000}, {\"females\": 1256000, \"country\": \"United States\", \"age\": 23, \"males\": 1242000" +
-    ", \"year\": 1950, \"total\": 2498000}, {\"females\": 1270000, \"country\": \"United States\", \"age\": 24, " +
-    "\"males\": 1258000, \"year\": 1950, \"total\": 2528000}, {\"females\": 1285000, \"country\": \"United State" +
-    "s\", \"age\": 25, \"males\": 1273000, \"year\": 1950, \"total\": 2558000}, {\"females\": 1301000, \"country" +
-    "\": \"United States\", \"age\": 26, \"males\": 1289000, \"year\": 1950, \"total\": 2590000}, {\"females\": 1" +
-    "306000, \"country\": \"United States\", \"age\": 27, \"males\": 1295000, \"year\": 1950, \"total\": 2601000" +
-    "}, {\"females\": 1296000, \"country\": \"United States\", \"age\": 28, \"males\": 1285000, \"year\": 1950, " +
-    "\"total\": 2581000}, {\"females\": 1277000, \"country\": \"United States\", \"age\": 29, \"males\": 1265000" +
-    ", \"year\": 1950, \"total\": 2542000}, {\"females\": 1256000, \"country\": \"United States\", \"age\": 30, " +
-    "\"males\": 1245000, \"year\": 1950, \"total\": 2501000}, {\"females\": 1232000, \"country\": \"United State" +
-    "s\", \"age\": 31, \"males\": 1222000, \"year\": 1950, \"total\": 2454000}, {\"females\": 1213000, \"country" +
-    "\": \"United States\", \"age\": 32, \"males\": 1202000, \"year\": 1950, \"total\": 2415000}, {\"females\": 1" +
-    "202000, \"country\": \"United States\", \"age\": 33, \"males\": 1191000, \"year\": 1950, \"total\": 2393000" +
-    "}, {\"females\": 1196000, \"country\": \"United States\", \"age\": 34, \"males\": 1185000, \"year\": 1950, " +
-    "\"total\": 2381000}, {\"females\": 1187000, \"country\": \"United States\", \"age\": 35, \"males\": 1175000" +
-    ", \"year\": 1950, \"total\": 2361000}, {\"females\": 1174000, \"country\": \"United States\", \"age\": 36, " +
-    "\"males\": 1162000, \"year\": 1950, \"total\": 2336000}, {\"females\": 1162000, \"country\": \"United State" +
-    "s\", \"age\": 37, \"males\": 1150000, \"year\": 1950, \"total\": 2311000}, {\"females\": 1151000, \"country" +
-    "\": \"United States\", \"age\": 38, \"males\": 1138000, \"year\": 1950, \"total\": 2289000}, {\"females\": 1" +
-    "139000, \"country\": \"United States\", \"age\": 39, \"males\": 1127000, \"year\": 1950, \"total\": 2265000" +
-    "}, {\"females\": 1127000, \"country\": \"United States\", \"age\": 40, \"males\": 1115000, \"year\": 1950, " +
-    "\"total\": 2242000}, {\"females\": 1119000, \"country\": \"United States\", \"age\": 41, \"males\": 1106000" +
-    ", \"year\": 1950, \"total\": 2225000}, {\"females\": 1094000, \"country\": \"United States\", \"age\": 42, " +
-    "\"males\": 1083000, \"year\": 1950, \"total\": 2177000}, {\"females\": 1041000, \"country\": \"United State" +
-    "s\", \"age\": 43, \"males\": 1040000, \"year\": 1950, \"total\": 2081000}, {\"females\": 973000, \"country" +
-    "\": \"United States\", \"age\": 44, \"males\": 985000, \"year\": 1950, \"total\": 1958000}, {\"females\": " +
-    "908000, \"country\": \"United States\", \"age\": 45, \"males\": 932000, \"year\": 1950, \"total\": 1840000" +
-    "}, {\"females\": 838000, \"country\": \"United States\", \"age\": 46, \"males\": 875000, \"year\": 1950" +
-    ", \"total\": 1713000}, {\"females\": 796000, \"country\": \"United States\", \"age\": 47, \"males\": 838" +
-    "000, \"year\": 1950, \"total\": 1634000}, {\"females\": 797000, \"country\": \"United States\", \"age\":" +
-    " 48, \"males\": 833000, \"year\": 1950, \"total\": 1630000}, {\"females\": 827000, \"country\": \"United" +
-    " States\", \"age\": 49, \"males\": 847000, \"year\": 1950, \"total\": 1674000}, {\"females\": 852000, \"" +
-    "country\": \"United States\", \"age\": 50, \"males\": 858000, \"year\": 1950, \"total\": 1710000}, {\"fe" +
-    "males\": 880000, \"country\": \"United States\", \"age\": 51, \"males\": 871000, \"year\": 1950, \"total" +
-    "\": 1751000}, {\"females\": 893000, \"country\": \"United States\", \"age\": 52, \"males\": 873000, \"ye" +
-    "ar\": 1950, \"total\": 1766000}, {\"females\": 878000, \"country\": \"United States\", \"age\": 53, \"ma" +
-    "les\": 857000, \"year\": 1950, \"total\": 1735000}, {\"females\": 846000, \"country\": \"United States\"," +
-    " \"age\": 54, \"males\": 828000, \"year\": 1950, \"total\": 1674000}, {\"females\": 818000, \"country\": \"United States\", \"age\": 55, \"males\": 802000, \"year\": 1950, \"total\": 1620000}, {\"females\": 791000, \"country\": \"United States\", \"age\": 56, \"males\": 775000, \"year\": 1950, \"total\": 1566000}, {\"females\": 766000, \"country\": \"United States\", \"age\": 57, \"males\": 751000, \"year\": 1950, \"total\": 1517000}, {\"females\": 747000, \"" +
-    "country\": \"United States\", \"age\": 58, \"males\": 734000, \"year\": 1950, \"total\": 1481000}, {\"females\": 732000, \"country\": \"United States\", \"age\": 59, \"males\": 719000, \"year\": 1950, \"total\": 1451000}, {\"females\": 714000, \"country\": \"United States\", \"age\": 60, \"males\": 703000, \"year\": " +
-    "1950, \"total\": 1416000}, {\"females\": 693000, \"country\": \"United States\", \"age\": 61, \"males\": 684000, \"year\": 1950, \"total\": 1377000}, {\"females\": 674000, \"country\": \"United States\", \"age\": 62, \"males\": 664000, \"year\": 1950, \"total\": 1338000}, {\"females\": 658000, \"country\": \"United States\", \"age\": 63, \"males\": 640000, \"year\": 1950, \"total\": 1298000}, {\"females\": 643000, \"country\": \"United States\", \"age\": 64, \"" +
-    "males\": 613000, \"year\": 1950, \"total\": 1256000}, {\"females\": 626000, \"country\": \"United States\", \"age\": 65, \"males\": 586000, \"year\": 1950, \"total\": " +
-    "1213000}, {\"females\": 611000, \"country\": \"United States\", \"age\": 66, \"males\": 560000, \"year\": 1950, \"total\": 1171000}, {\"females\": 587000, \"country\": \"United States\", \"age\": 67, \"males\": 528000, \"year\": 1950, \"total\": 1115000}, {\"females\": 548000, \"country\": \"United States\", \"age\": 68, \"males\": 490000, \"year\": 1950, \"total\": 1038000}, {\"females\": 500000, \"country\": \"United States\", \"age\": 69, \"males\": 449000, \"" +
-    "year\": 1950, \"total\": 949000}, {\"females\": 453000, \"country\": \"United States\", \"age\": 70, \"males\": 407000, \"year\": 1950, \"total\": 861000}, {\"females\": 405000, \"country\": \"United States\", \"age\": 71, \"males\": 365000, \"year\": 1950, \"total\": 770000}, {\"females\": 364000, \"country\": \"United States\", \"age\": 72, \"males\": 328000, \"year\": 1950, \"total\": 692000}, {\"females\": 334000, \"" +
-    "country\": \"United States\", \"age\": 73, \"males\": 298000, \"year\": 1950, \"total\": " +
-    "632000}, {\"females\": 311000, \"country\": \"United States\", \"age\": 74, \"males\": 275000, \"year\": 1950, \"total\": 586000}, {\"females\": 288000, \"country\": \"United States\", \"age\": 75, \"males\": 251000, \"year\": 1950, \"total\": 539000}, {\"females\": 266000, \"country\": \"United States\", \"age\": 76, \"males\": 228000, \"year\": 1950, \"total\": 494000}, {\"females\": 242000, \"country\": \"United States\", \"age\": 77, \"males\": 206000, \"" +
-    "year\": 1950, \"total\": 448000}, {\"females\": 214000, \"country\": \"United States\", \"age\": 78, \"males\": 181000, \"year\": 1950, \"total\": 395000}, {\"females\": 183000, \"country\": \"United States\", \"age\": 79, \"males\": 157000, \"year\": 1950, \"total\": 340000}, {\"females\": 134000, \"country\": \"United States\", \"age\": 80, \"males\": 134000, \"year\": 1950, \"total\": 134000}, {\"females\": 113000, \"country" +
-    "\": \"United States\", \"age\": 81, \"males\": 113000, \"year\": 1950, \"total\": 113000}, {\"females\": 94200, \"country\": \"United States\", \"age\": 82, \"males\": 94200, \"year\": 1950, \"total\": 94200}, {\"females\": 79900, \"country\": \"United States\", \"age\": 83, \"males\": 79900, \"year\": 1950, \"total\": 79900}, {\"females\": 68700, \"country\": \"United States\", \"age\": 84, \"males\": 68700, \"year\": 1950, \"total\": 68700}, {\"females\": 58400" +
-    ", \"country\": \"United States\", \"age\": 85, \"males\": 58400, \"year\": 1950, \"total\": 58400}, {\"females\": 49400, \"country\": \"United States\", \"age\": 86, \"males\": 49400, \"year\": 1950, \"total\": 49400}, {\"females\": 41200, \"country\": \"United States\", \"age\": 87, \"males\": 41200, \"year\": 1950, \"total\": 41200}, {\"females\": 33600, \"country\": \"United States\", \"age\": 88, \"males\": 33600, \"year\": 1950, \"total\": " +
-    "33600}, {\"females\": 26500, \"country\": \"United States\", \"age\": 89, \"males\": 26500, \"year\": 1950, \"total\": 26500}, {\"females\": 20700, \"country\": \"United States\", \"age\": 90, \"males\": 20700, \"year\": 1950, \"total\": 20700}, {\"females\": 15800, \"country\": \"United States\", \"age\": 91, \"males\": 15800, \"year\": 1950, \"total\": 15800}, {\"females\": 11800, \"country\": \"United States\", \"age\": 92, \"males\": 11800, \"year\": 1950, \"total" +
-    "\": 11800}, {\"females\": 8620, \"country\": \"United States\", \"age\": 93, \"males\": 8620, \"year\": 1950, \"total\": 8620}, {\"females\": 6230, \"country\": \"United States\", \"age\": 94, \"males\": 6230, \"year\": 1950, \"total\": 6230}, {\"females\": 4420, \"country\": \"United States\", \"age\": 95, \"males\": 4420, \"year\": 1950, \"total\": 4420}, {\"females\": 3150, \"country\": \"United States\", \"age\": 96" +
-    ", \"males\": 3150, \"year\": 1950, \"total\": 3150}, {\"females\": 2190, \"country\": \"United States\", \"age\": 97, \"males\": 2190, \"year\": 1950, \"total\": 2190}, {\"females\": 1360, \"country\": \"United States\", \"age\": 98, \"males\": 1360, \"year\": 1950, \"total\": 1360}, {\"females\": 686, \"country\": \"United States\", \"age\": 99, \"males\": 686, \"year\": 1950, \"total\": 686}, {\"females\": 1200, \"country\": \"United States\", \"age\": 100, \"males\": 1200, \"year\": 1950, \"total\": 1200}]";
-
-var data = JSON.parse(tempdata);
-var test = data.slice(0, 5);
-
-var genderPercent = function(data) {
-    var f = data.map(function(n) {
-        return n.females;
-    });
-    var total_f = f.reduce(function(a, b) {
-        return a + b;
-    });
-    var t = data.map(function(n) {
-        return n.total;
-    });
-    var total = t.reduce(function(a, b) {
-        return a + b;
-    });
-    return parseInt(total_f / total * 10000) / 100 + "%";
-};
-
-var minorCount = function(data) {
-    var t = data.filter(function(n) {
-        return n.age < 18;
-    }).map(function(n) {
-        return n.total;
-    });
-    if (t.length > 0) {
-        var total = t.reduce(function(a, b) {
-            return a + b;
-        });
-        return total;
-    }
-    return 0;
-};
-
-var medianAge = function(data) {
-    var total = data.map(function(n) {
-        return n.total;
-    }).reduce(function(a, b) {
-        return a + b;
-    });
-    
-    var mid = total / 2;
-    var med = data.reduce(function(a, b) {
-        if (mid < a.total) {
-            return a;
-        } else {
-            mid -= a.total;
-            return b;
-        }
-    });
-    return med.age;
-};
-
-console.log("Ages 0 to 4 only");
-console.log("Percent Female: ", genderPercent(test));
-console.log("Median Age: ", medianAge(test));
-console.log("Minor (under 18) Count: ", minorCount(test));
-console.log("All test data");
-console.log("Percent Female: ", genderPercent(data));
-console.log("Median Age: ", medianAge(data));
-console.log("Minor Count: ", minorCount(data));
-
